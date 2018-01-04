@@ -100,3 +100,5 @@ with namespace('monitoring'):
     kov_route = kov_svc.route(name=kov_svc.name, host=get_variant("kube_ops_view_url"))
     kov_route.labels = kov_svc.labels
     kov_route.new_tls(insecureEdgeTerminationPolicy='Redirect', termination='edge')
+
+# vim: syntax=python

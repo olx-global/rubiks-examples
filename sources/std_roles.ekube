@@ -24,3 +24,5 @@ role_bindings['self-access-reviewers'] = ClusterRoleBinding('self-access-reviewe
                                                             roleRef='self-access-reviewer')
 role_bindings['self-access-reviewers'].new_subject(kind='SystemGroup', name='system:authenticated')
 role_bindings['self-access-reviewers'].new_subject(kind='SystemGroup', name='system:unauthenticated')
+
+# vim: syntax=python

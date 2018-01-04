@@ -106,3 +106,5 @@ scc['privileged'].users.extend(('system:serviceaccount:openshift-infra:build-con
 #   restricted
 scc['restricted'].groups.extend(('system:authenticated',
                                  ))
+
+# vim: syntax=python

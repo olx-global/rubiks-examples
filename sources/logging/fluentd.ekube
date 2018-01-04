@@ -67,3 +67,5 @@ with namespace("logging"):
 
     ds_ctr.resources.new_limit(memory='200Mi')
     ds_ctr.resources.new_request(cpu=0.1, memory='200Mi')
+
+# vim: syntax=python

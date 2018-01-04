@@ -15,3 +15,5 @@ def get_replicas(*args):
 variants = get_lookup('variants.yaml', git_crypt_ok=False, non_exist_ok=False)
 def get_variant(key):
     return variants.get_key(key + '.{cluster}', key)
+
+# vim: syntax=python
