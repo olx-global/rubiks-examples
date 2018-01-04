@@ -1,0 +1,17 @@
+# This file is part of the rubiks-examples, an example rubiks repository to help
+# show how rubiks could be used
+
+# In this file we create two "lookups", one for replicas and one for general variants. For the
+# replicas, we're explicit about the keys we use, but for the variants, we expect a single key
+# 
+# We might also look up secrets in this file, in which case we'd set is_confidential=True, making
+# sure that the returned value was marked as a Confidential type and would be in the auto-generated
+# out/.gitignore
+
+replicas = get_lookup('replicas.yaml', git_crypt_ok=False, non_exist_ok=True, default=1, assert_type=int)
+def get_replicas(*args):
+    return replicas.get_key(*args)
+
+variants = get_lookup('variants.yaml', git_crypt_ok=False, non_exist_ok=False)
+def get_variant(key):
+    return variants.get_key(key + '.{cluster}', key)

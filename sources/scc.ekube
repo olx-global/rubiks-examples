@@ -1,0 +1,108 @@
+# This file is part of the rubiks-examples, an example rubiks repository to help
+# show how rubiks could be used
+
+# In this file, we create our standard security context constraints (scc) that come on
+# Openshift 1.5.1 clusters. We do this because normally adding to these is a matter of
+# an oc adm command, but by generating them in full, we can push them correctly.
+
+scc = {}
+
+# default SCCs that come with Openshift 1.5.1
+
+scc['restricted'] = SecurityContextConstraints(
+    'restricted', fsGroup=SCCGroups(type='MustRunAs'), supplementalGroups=SCCGroups(type='RunAsAny'),
+    requiredDropCapabilities=['KILL', 'MKNOD', 'SYS_CHROOT', 'SETUID', 'SETGID'],
+    runAsUser=SCCRunAsUser(type='MustRunAsRange'), seLinuxContext=SCCSELinux(strategy='MustRunAs'),
+    volumes=['configMap', 'downwardAPI', 'emptyDir', 'persistentVolumeClaim', 'secret'],
+    )
+scc['restricted'].annotations = {'kubernetes.io/description': 'restricted denies access to all host features '
+    'and requires pods to be run with a UID, and SELinux context that are allocated to the namespace.  This '
+    'is the most restrictive SCC.'}
+
+
+scc['privileged'] = SecurityContextConstraints(
+    'privileged', allowHostDirVolumePlugin=True, allowHostIPC=True, allowHostNetwork=True, allowHostPID=True,
+    allowHostPorts=True, allowPrivilegedContainer=True, fsGroup=SCCGroups(type='RunAsAny'),
+    runAsUser=SCCRunAsUser(type='RunAsAny'), seLinuxContext=SCCSELinux(strategy='RunAsAny'), seccompProfiles=['*'],
+    supplementalGroups=SCCGroups(type='RunAsAny'), volumes=['*'],
+    )
+scc['privileged'].annotations = {'kubernetes.io/description': 'privileged allows access to all privileged and host '
+    'features and the ability to run as any user, any group, any fsGroup, and with any SELinux context.  WARNING: '
+    'this is the most relaxed SCC and should be used only for cluster administration. Grant with caution.'}
+
+
+scc['anyuid'] = SecurityContextConstraints(
+    'anyuid', priority=10, fsGroup=SCCGroups(type='RunAsAny'), requiredDropCapabilities=['MKNOD', 'SYS_CHROOT'],
+    runAsUser=SCCRunAsUser(type='RunAsAny'), seLinuxContext=SCCSELinux(strategy='MustRunAs'),
+    supplementalGroups=SCCGroups(type='RunAsAny'),
+    volumes=['configMap', 'downwardAPI', 'emptyDir', 'persistentVolumeClaim', 'secret'],
+    )
+scc['anyuid'].annotations = {'kubernetes.io/description': 'anyuid provides all features of the restricted SCC but '
+    'allows users to run with any UID and any GID.  This is the default SCC for authenticated users.'}
+
+
+scc['nonroot'] = SecurityContextConstraints(
+    'nonroot', fsGroup=SCCGroups(type='RunAsAny'), runAsUser=SCCRunAsUser(type='MustRunAsNonRoot'),
+    seLinuxContext=SCCSELinux(strategy='MustRunAs'), supplementalGroups=SCCGroups(type='RunAsAny'),
+    volumes=['configMap', 'downwardAPI', 'emptyDir', 'persistentVolumeClaim', 'secret'],
+    )
+scc['nonroot'].annotations = {'kubernetes.io/description': 'nonroot provides all features of the restricted SCC '
+    'but allows users to run with any non-root UID.  The user must specify the UID or it must be specified on the '
+    'by the manifest of the container runtime.'}
+
+
+scc['hostaccess'] = SecurityContextConstraints(
+    'hostaccess', allowHostDirVolumePlugin=True, allowHostIPC=True, allowHostNetwork=True, allowHostPID=True,
+    allowHostPorts=True, fsGroup=SCCGroups(type='MustRunAs'), runAsUser=SCCRunAsUser(type='MustRunAsRange'),
+    seLinuxContext=SCCSELinux(strategy='MustRunAs'), supplementalGroups=SCCGroups(type='RunAsAny'),
+    volumes=['configMap', 'downwardAPI', 'emptyDir', 'hostPath', 'persistentVolumeClaim', 'secret'],
+    )
+scc['hostaccess'].annotations = {'kubernetes.io/description': 'hostaccess allows access to all host namespaces but '
+    'still requires pods to be run with a UID and SELinux context that are allocated to the namespace. WARNING: this '
+    'SCC allows host access to namespaces, file systems, and PIDS.  It should only be used by trusted pods.  Grant '
+    'with caution.'}
+
+
+scc['hostmount-anyuid'] = SecurityContextConstraints(
+    'hostmount-anyuid', allowHostDirVolumePlugin=True, fsGroup=SCCGroups(type='RunAsAny'),
+    runAsUser=SCCRunAsUser(type='RunAsAny'), supplementalGroups=SCCGroups(type='RunAsAny'),
+    seLinuxContext=SCCSELinux(strategy='MustRunAs'),
+    volumes=['configMap', 'downwardAPI', 'emptyDir', 'hostPath', 'nfs', 'persistentVolumeClaim', 'secret'],
+    )
+scc['hostmount-anyuid'].annotations = {'kubernetes.io/description': 'hostmount-anyuid provides all the features of '
+    'the restricted SCC but allows host mounts and any UID by a pod.  This is primarily used by the persistent volume '
+    'recycler. WARNING: this SCC allows host file system access as any UID, including UID 0.  Grant with caution.'}
+
+
+scc['hostnetwork'] = SecurityContextConstraints(
+    'hostnetwork', allowHostNetwork=True, allowHostPorts=True, fsGroup=SCCGroups(type='MustRunAs'),
+    requiredDropCapabilities=['KILL', 'MKNOD', 'SYS_CHROOT', 'SETUID', 'SETGID'],
+    runAsUser=SCCRunAsUser(type='MustRunAsRange'), seLinuxContext=SCCSELinux(strategy='MustRunAs'),
+    supplementalGroups=SCCGroups(type='MustRunAs'),
+    volumes=['configMap', 'downwardAPI', 'emptyDir', 'persistentVolumeClaim', 'secret'],
+    )
+scc['hostnetwork'].annotations = {'kubernetes.io/description': 'hostnetwork allows using host networking and host '
+    'ports but still requires pods to be run with a UID and SELinux context that are allocated to the namespace.'}
+
+# Default SCC bindings in OpenShift 1.5.1
+
+#   anyuid
+scc['anyuid'].groups.extend(('system:cluster-admins',
+                             ))
+scc['anyuid'].users.extend(('system:serviceaccount:openshift-infra:default',
+                            ))
+
+#   hostmount-anyuid
+scc['hostmount-anyuid'].users.extend(('system:serviceaccount:openshift-infra:pv-recycler-controller',
+                                      ))
+
+#   privileged
+scc['privileged'].groups.extend(('system:cluster-admins',
+                                 'system:nodes',
+                                 ))
+scc['privileged'].users.extend(('system:serviceaccount:openshift-infra:build-controller',
+                                ))
+
+#   restricted
+scc['restricted'].groups.extend(('system:authenticated',
+                                 ))

@@ -1,0 +1,26 @@
+# This file is part of the rubiks-examples, an example rubiks repository to help
+# show how rubiks could be used
+
+# In this file, we create our standard non-system rolebindings that exist on Openshift 1.5.1 clusters.
+
+role_bindings = {}
+
+role_bindings['cluster-admins'] = ClusterRoleBinding('cluster-admins', roleRef='cluster-admin')
+role_bindings['cluster-admins'].new_subject(kind='SystemUser', name='system:admin')
+role_bindings['cluster-admins'].new_subject(kind='SystemGroup', name='system:cluster-admins')
+
+role_bindings['cluster-readers'] = ClusterRoleBinding('cluster-readers', roleRef='cluster-reader')
+role_bindings['cluster-readers'].new_subject(kind='SystemGroup', name='system:cluster-readers')
+
+role_bindings['basic-users'] = ClusterRoleBinding('basic-users', roleRef='basic-user')
+role_bindings['basic-users'].new_subject(kind='SystemGroup', name='system:authenticated')
+
+role_bindings['cluster-status-binding'] = ClusterRoleBinding('cluster-status-binding',
+                                                             roleRef='cluster-status')
+role_bindings['cluster-status-binding'].new_subject(kind='SystemGroup', name='system:authenticated')
+role_bindings['cluster-status-binding'].new_subject(kind='SystemGroup', name='system:unauthenticated')
+
+role_bindings['self-access-reviewers'] = ClusterRoleBinding('self-access-reviewers',
+                                                            roleRef='self-access-reviewer')
+role_bindings['self-access-reviewers'].new_subject(kind='SystemGroup', name='system:authenticated')
+role_bindings['self-access-reviewers'].new_subject(kind='SystemGroup', name='system:unauthenticated')

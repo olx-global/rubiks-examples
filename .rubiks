@@ -1,0 +1,12 @@
+; This file is part of the rubiks-examples, an example rubiks repository to help
+; show how rubiks could be used
+
+[layout]
+sources = sources
+outputs = out
+confidentiality_mode = gitignore-single
+
+[cluster_staging]
+prod_state = staging
+
+[cluster_production]

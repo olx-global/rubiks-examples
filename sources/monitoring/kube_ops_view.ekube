@@ -1,0 +1,102 @@
+# This file is part of the rubiks-examples, an example rubiks repository to help
+# show how rubiks could be used
+
+# In this file, we use a "monitoring" namespace, and create all the bits (including the
+# heapster) to run a kube-ops-view. Some bits of the deployment are controlled by the
+# variants.yaml and the number of instances to run is controlled by the replicas.yaml
+
+import_python("../std_roles.ekube", "role_bindings")
+import_python("../scc.ekube", "scc")
+import_python("../lookups.kube", "get_variant", "get_replicas")
+
+
+with namespace('openshift-infra'):
+    heapster_labels = {'metrics-infra': 'heapster', 'name': 'heapster'}
+    heapster_secret = 'heapster-secrets'
+
+    heapster_sa = ServiceAccount('heapster', secrets=[heapster_secret])
+    heapster_sa.labels = {'metrics-infra': 'support'}
+    role_bindings['cluster-readers'].subjects.append(heapster_sa)
+
+    heapster_rc = ReplicationController('heapster', replicas=1, selector=heapster_labels)
+    heapster_rc.labels = heapster_labels
+    heapster_rc.pod_template.update(labels=heapster_labels, serviceAccountName=heapster_sa)
+    heapster_rc.pod_template.new_volume(PodVolumeSecretSpec, name=heapster_secret,
+                                        secret_name=heapster_secret)
+    heapster_ctr = heapster_rc.pod_template.new_container(name='heapster',
+                                                          image=get_variant('heapster_image'),
+                                                          env={'STARTUP_TIMEOUT': '${STARTUP_TIMEOUT}'})
+    heapster_ctr.new_volumeMount(name=heapster_rc.pod_template.volumes[0].name, path='/secrets')
+    heapster_ctr.update(command=[
+        'heapster-wrapper.sh',
+        '--source=kubernetes:https://kubernetes.default.svc?useServiceAccount=true&kubeletHttps=true&kubeletPort=10250',
+        '--tls_cert=/secrets/tls.crt',
+        '--tls_key=/secrets/tls.key',
+        '--tls_client_ca=/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt',
+        '--allowed_users=system:master-proxy',
+        '--metric_resolution=15s',
+        ],
+        args=[])
+    heapster_ctr.new_port(name='https', containerPort=8082)
+
+    heapster_svc = ClusterIPService('heapster', selector=heapster_rc.pod_template)
+    heapster_svc.new_port(protocol='TCP', port=9090, targetPort='https')
+    heapster_svc.labels = heapster_labels
+    heapster_svc.annotations = {'service.alpha.openshift.io/serving-cert-secret-name': heapster_secret}
+
+
+with namespace('monitoring'):
+    redis_port = 6379
+    kov_port = 8080
+
+    # kube ops view serviceaccount
+    kov_sa = ServiceAccount('kube-ops-view')
+    role_bindings['cluster-admins'].subjects.append(kov_sa)
+    scc['anyuid'].add_user(kov_sa)
+
+    # redis deploymentconfig
+    redis_dc = DeploymentConfig('kube-ops-view-redis', replicas=1, labels={'redis': 'kube-ops-view'},
+                                triggers=[DCConfigChangeTrigger()])
+    redis_dc.pod_template.labels = redis_dc.labels
+    redis_dc.selector = redis_dc.labels
+    redis_dc.new_strategy(DCRollingStrategy).new_rollingParams(maxSurge=1, maxUnavailable=1,
+                                                               timeoutSeconds=600)
+    redis_dc.strategy.activeDeadlineSeconds = 21600
+    redis_ctr = redis_dc.pod_template.new_container(name='redis', image=get_variant('redis_image'),
+                                                    ports=redis_port)
+    redis_ctr.new_readinessProbe(ContainerProbeTCPPortSpec, port=redis_port)
+    redis_ctr.resources.new_limits(cpu=0.2, memory='500Mi')
+    redis_ctr.resources.new_requests(cpu=0.05, memory='50Mi')
+    redis_ctr.new_volumeMount(name='data', path='/data')
+    redis_dc.pod_template.new_volume(PodVolumeEmptyDirSpec, name=redis_ctr.volumeMounts[0].name)
+
+    # redis service
+    redis_svc = ClusterIPService(redis_dc.name, ports=redis_port, selector=redis_dc.pod_template)
+
+    # kube ops view deploymentconfig
+    kov_dc = DeploymentConfig('kube-ops-view',
+                              replicas=get_replicas("monitoring.{cluster}.kube-ops-view"),
+                              labels={'app': 'kube-ops-view'},
+                              triggers=[DCConfigChangeTrigger()])
+    kov_dc.pod_template.labels = kov_dc.labels
+    kov_dc.selector = kov_dc.labels
+    kov_dc.new_strategy(DCRollingStrategy).new_rollingParams(maxSurge=1, maxUnavailable=1,
+                                                             timeoutSeconds=600)
+    kov_dc.strategy.activeDeadlineSeconds = 21600
+    kov_dc.pod_template.serviceAccountName = kov_sa
+    kov_ctr = kov_dc.pod_template.new_container(
+        name='service', image=get_variant("kube_ops_view_image"), ports=kov_port,
+        args=['--redis-url=' + redis_svc.internal_addr(scheme='redis')])
+    kov_ctr.new_readinessProbe(ContainerProbeHTTPSpec, path='/health', port=kov_port,
+                               initialDelaySeconds=5, timeoutSeconds=1)
+    kov_ctr.resources.new_limits(cpu=0.5, memory='500Mi')
+    kov_ctr.resources.requests = kov_ctr.resources.limits.clone()
+
+    # kube ops view service
+    kov_svc = ClusterIPService(kov_dc.name, ports=kov_port, selector=kov_dc.pod_template)
+    kov_svc.labels = {'service': 'kube-ops-view', 'application': 'kube-ops-view'}
+
+    # kube ops view route
+    kov_route = kov_svc.route(name=kov_svc.name, host=get_variant("kube_ops_view_url"))
+    kov_route.labels = kov_svc.labels
+    kov_route.new_tls(insecureEdgeTerminationPolicy='Redirect', termination='edge')

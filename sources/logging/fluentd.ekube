@@ -1,0 +1,69 @@
+# This file is part of the rubiks-examples, an example rubiks repository to help
+# show how rubiks could be used
+
+# In this file, we create a basic fluentd as a DaemonSet that forwards to a cluster-external
+# elasticsearch. This allows us to show how a ConfigMap works too, and how to include it.
+
+import_python("../std_roles.ekube", "role_bindings")
+import_python("../scc.ekube", "scc")
+import_python("../lookups.kube", "get_variant")
+
+with namespace("logging"):
+    # create a serviceaccount which can run as root and mount
+    sa = ServiceAccount("fluentd")
+    role_bindings['cluster-readers'].subjects.append(sa)
+    scc['hostmount-anyuid'].add_user(sa)
+
+    td_conf = """
+<match fluent.**>
+  type null
+</match>
+
+<source>
+  type tail
+  path /var/log/containers/*.log
+  pos_file /var/log/fluentd-container-log.pos
+  time_format %Y-%m-%dT%H:%M:%S.%NZ
+  tag kubernetes.*
+  format json
+  read_from_head true
+</source>
+
+<match **>
+  type elasticsearch
+  log_level info
+  include_tag_key true
+  logstash_format true
+  logstash_prefix logstash
+  num_threads 4
+""".lstrip()
+    td_conf += "  host " + get_variant('elasticsearch') + "\n"
+    td_conf += "  port 9100\n"
+    td_conf += "</match>\n"
+
+    config = ConfigMap('logging-fluentd', files={'td-agent.conf': td_conf})
+
+    ds = DaemonSet('logging-fluentd', labels={'app': 'logging-fluentd', 'type': 'monitoring'})
+    ds.pod_template.name = 'fluentd'
+
+    ds_ctr = ds.pod_template.new_container(name='fluentd-elasticsearch', command=['/usr/sbin/td-agent'],
+                                           image=get_variant('fluentd_image'),
+                                           )
+
+    ds.pod_template.update(serviceAccountName=sa, securityContext=SecurityContext(runAsUser=0),
+                           terminationGracePeriodSeconds=30, restartPolicy='Always')
+    ds.pod_template.new_volume(PodVolumeHostSpec, name='var-log', path='/var/log')
+    ds.pod_template.new_volume(PodVolumeHostSpec, name='docker-containers', path='/var/lib/docker/containers')
+    ds.pod_template.new_volume(PodVolumeConfigMapSpec, name='config-vol', map_name=config.name)
+
+    for i in (0, 1, 2):
+        ds_ctr.new_volumeMount(name=ds.pod_template.volumes[i].name)
+        if i != 2:
+            ds_ctr.volumeMounts[i].path = ds.pod_template.volumes[i].path
+            if i == 1:
+                ds_ctr.volumeMounts[i].readOnly = True
+        else:
+            ds_ctr.volumeMounts[i].path = '/etc/td-agent'
+
+    ds_ctr.resources.new_limit(memory='200Mi')
+    ds_ctr.resources.new_request(cpu=0.1, memory='200Mi')

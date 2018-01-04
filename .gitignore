@@ -1,0 +1,10 @@
+# This file is part of the rubiks-examples, an example rubiks repository to help
+# show how rubiks could be used
+
+# we wouldn't normally ignore out in a real repository, but for the sake of
+# making it clear what's actually happening when rubiks generate is run, we
+# ignore it here in this version
+/out
+
+# ignore vi swap files
+*.sw[nop]

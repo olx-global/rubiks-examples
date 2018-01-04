@@ -1,0 +1,11 @@
+# This file is part of the rubiks-examples, an example rubiks repository to help
+# show how rubiks could be used
+
+# In this file, we can set configured replication factors for deploymentconfigs,
+# deployments or replicationcontrollers that have replicas=get_replicas(...) via
+# lookup.kube. In the case below, we're looking up "monitoring.{cluster}.kube-ops-view"
+# Staging defaults to 1 and production is set to 2 below.
+
+monitoring:
+  production:
+    kube-ops-view: 2

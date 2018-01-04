@@ -1,0 +1,29 @@
+# This file is part of the rubiks-examples, an example rubiks repository to help
+# show how rubiks could be used
+
+# In this file, we store variants of different variables used by the config and called by
+# doing the import_python("lookup.kube", "get_variant") and then a subsequent get_variant().
+# The variant call allows us to choose whether or not to split by cluster, so we can have
+# variables that are the same across all clusters, or different on each
+
+## cluster-external names
+
+kube_ops_view_url:
+  staging: kube-ops-view.my-staging-cluster.example.com
+  production: kube-ops-view.my-production-cluster.example.com
+
+elasticsearch:
+  staging: my-staging-elasticsearch-host
+  production: my-production-elasticsearch-host
+
+## images
+
+fluentd_image:
+  staging: "gcr.io/google_containers/fluentd-elasticsearch:1.20"
+  production: "gcr.io/google_containers/fluentd-elasticsearch:1.19"
+
+heapster_image: "openshift/origin-metrics-heapster:latest"
+
+kube_ops_view_image: "raffaelespazzoli/ocp-ops-view:latest"
+
+redis_image: "redis:3.2-alpine"
